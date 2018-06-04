@@ -73,7 +73,6 @@ class Jira:
                 if author not in d[key].keys():
                     d[key][author] = []
                 d[key][author].append(worklog['timeSpent'])
-        print(d)
         return d
 
 
