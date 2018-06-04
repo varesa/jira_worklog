@@ -1,0 +1,74 @@
+---
+
+resources:
+- name: hourly-timer
+  type: time
+  source:
+    interval: 1h
+
+- name: source-repository
+  type: git
+  source:
+    uri: https://github.com/varesa/jira_worklog.git
+
+
+jobs:
+- name: "Worklog"
+  public: false
+  plan:
+
+  - get: hourly-timer
+    trigger: true
+
+  - get: source-repository
+
+  - task: "Run worklog"
+    config:
+      inputs:
+      - name: source-repository
+
+      outputs:
+      - name: table
+
+      platform: linux
+
+      image_resource:
+        type: docker-image
+        source:
+          repository: "python"
+
+      params:
+        JIRA_SERVER: https://jira.esav.fi
+        JIRA_PROJECT: ((jira_credentials.project))
+        JIRA_USERNAME: ((jira_credentials.username))
+        JIRA_PASSWORD: ((jira_credentials.password))
+
+      run:
+        path: bash
+        args:
+        - -euc
+        - |
+          pip3 install requests
+          python3 source-repository/jira_worklog.py  \
+            --server=$JIRA_SERVER       \
+            --project=$JIRA_PROJECT     \
+            --username=$JIRA_USERNAME   \
+            --password=$JIRA_PASSWORD   \
+            > table/worklog
+
+  - task: "Show table"
+    config:
+      inputs:
+      - name: table
+
+      platform: linux
+
+      image_resource:
+        type: docker-image
+        source:
+          repository: "busybox"
+
+      run:
+        path: cat
+        args:
+        - table/worklog
