@@ -66,13 +66,16 @@ class Jira:
                 raise Exception("Something went wrong: " + resp.text)
 
             if len(resp.json()['worklogs']):
-                d[key] = {}
+                d[key] = {
+                    'summary': issue['fields']['summary'],
+                    'authors': {}
+                }
 
             for worklog in resp.json()['worklogs']:
                 author = worklog['author']['name']
-                if author not in d[key].keys():
-                    d[key][author] = []
-                d[key][author].append(worklog['timeSpent'])
+                if author not in d[key]['authors'].keys():
+                    d[key]['authors'][author] = []
+                d[key]['authors'][author].append(worklog['timeSpent'])
         return d
 
 
@@ -101,24 +104,33 @@ def get_args():
     return args
 
 
-def print_table(values):
+def print_table(issues):
     authors = set()
-    for issue in values.keys():
-        authors = authors.union(set(values[issue].keys()))
+    for issue in issues.keys():
+        authors = authors.union(set(issues[issue]['authors'].keys()))
 
 
     # Make ordered
     authors = tuple(authors)
     totals = {}
 
+    # Find the longest summary
+
+    summary_length = 0
+    for key in issues.keys():
+        summary_length = max(summary_length, len(issues[key]['summary']))
+
+    WHITESPACE = 1
+    TICKET_ID = 6
+    first_column_width = WHITESPACE + TICKET_ID + WHITESPACE + summary_length + WHITESPACE
+
     # Construct the header first as the length will be required later
 
-    header = "| {0:>8}".format("|")
-    header_length = 8
+    header = "|{0:>{1}}".format("|", first_column_width+1)
     for author in authors:
         header += "{0:>{1}} |".format(author, max(9, len(author)+1))
-        header_length += max(11, len(author)+3)
         totals[author] = []
+    header_length = len(header) - 2  # Total line length minus borders
 
     # Print the header together with some horizontal lines
 
@@ -128,20 +140,20 @@ def print_table(values):
 
     # Print the issue details
 
-    for issue in values.keys():
-        print("| {0:<6} |".format(issue), end="")
+    for key in issues.keys():
+        print("| {0:<6} {1:<{2}} |".format(key, issues[key]['summary'], summary_length), end="")
         for author in authors:
-            print("{0:>{1}} |".format(sum(values[issue][author]) if author in values[issue].keys() else "",
+            print("{0:>{1}} |".format(sum(issues[key]['authors'][author]) if author in issues[key]['authors'].keys() else "",
                                       max(9, len(author)+1)), end="")
-            if author in values[issue].keys():
-                totals[author].append(sum(values[issue][author]))
+            if author in issues[key]['authors'].keys():
+                totals[author].append(sum(issues[key]['authors'][author]))
 
         print("")
 
     # And print the footer with totals (+ some more horizontal lines)
 
     print("|{}|".format("-" * header_length))
-    print("|        |", end="")
+    print("|{0:>{1}}".format("|", first_column_width+1), end="")
     for author in authors:
         print("{0:>{1}} |".format(sum(totals[author]) if author in totals.keys() else "",
                                   max(9, len(author) + 1)), end="")
